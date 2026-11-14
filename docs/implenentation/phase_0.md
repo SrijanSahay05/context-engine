@@ -1,6 +1,6 @@
 # Phase 0: Local configuration and database connectivity
 
-Establish the infrastructure for the CLI engine. The initial scope covers configuration and database connectivity; extended work introduces migration management and the first database models. Memory behavior and Pydantic data schemas remain outside this phase.
+Establish the infrastructure for the CLI engine. The initial scope covers configuration and database connectivity; extended work introduces the shared database base and migration management. Application tables belong to [Phase 1](phase_1.md). Memory behavior and Pydantic data schemas remain outside this phase.
 
 **Status:** configuration and session infrastructure implemented; local checks passed. Alembic is installed and its migration scaffold initialized. Database configuration, metadata wiring, and migration revisions remain pending. Fresh-volume and application-data persistence checks remain outstanding. See the [Phase 0 log](../logs/phase_0.md).
 
@@ -13,7 +13,7 @@ Establish the infrastructure for the CLI engine. The initial scope covers config
 5. [x] Implement `db/session.py` with a synchronous engine and session factory.
 6. [x] Establish transaction ownership, commit, rollback, session closure, and engine disposal.
 7. [x] Verify configuration validation, database connectivity, and pgvector availability.
-8. [ ] Verify startup with a fresh volume and persistence of application data across restarts.
+8. [ ] Verify database startup with a fresh volume; application-data persistence is verified in Phase 1.
 9. [x] Add Flake8, strict mypy, pytest, and a PR workflow with required checks on `main`.
 10. [x] Record implementation decisions, verification results, and outstanding work.
 
@@ -26,37 +26,31 @@ Establish the infrastructure for the CLI engine. The initial scope covers config
 - Create settings and the session manager explicitly when the CLI is implemented; imports do not load configuration or create an engine.
 - The connectivity foundation checks pgvector availability; extended migration work will own extension activation.
 
-## Extended work: migrations and initial database models
+## Extended work: shared base and migration foundation
 
-### Decisions before defining tables
-
-- Select the embedding model and vector dimensions.
-- Define scope boundaries and how constraints prevent cross-scope links or memberships.
-- Define message roles, conversation ordering, and memory-to-message provenance.
-- Confirm whether explicit boxes and memberships belong in the initial schema.
-- Separate original evidence from generated attributes that can evolve.
+`db/base.py` belongs to this phase. It defines the single SQLAlchemy declarative base and shared metadata with consistent constraint naming. It does not define application tables or open database connections.
 
 ### Steps
 
-1. [ ] Complete migration dependencies: Alembic is installed; the Python pgvector integration remains pending.
-2. [ ] Define a shared SQLAlchemy declarative base and consistent constraint naming.
-3. [ ] Configure Alembic to use application database settings and the shared model metadata without loading credentials at import time or storing them in migration files.
-4. [ ] Create an explicit initial migration for pgvector extension activation.
-5. [ ] Define the first message and A-Mem database models, including keys, constraints, provenance, and agreed grouping structures.
-6. [ ] Register all model metadata and generate the first table migration after the extension migration.
-7. [ ] Review generated operations, foreign keys, vector types, indexes, and upgrade/downgrade behavior.
-8. [ ] Apply the migration chain to a fresh disposable database and verify the extension, tables, constraints, and revision state.
-9. [ ] Verify supported downgrade/re-upgrade behavior on disposable data and confirm no unexpected metadata differences remain.
-10. [ ] Add migration verification to CI and record results in the implementation log.
+1. [x] Install Alembic and initialize its migration environment.
+2. [ ] Define the shared declarative base and constraint naming convention in `db/base.py`.
+3. [ ] Configure Alembic to load database settings when invoked and use `Base.metadata`, without credentials in committed configuration.
+4. [ ] Create and review an explicit initial migration for pgvector extension activation.
+5. [ ] Apply that migration to a fresh disposable database and verify the extension and Alembic revision state.
+6. [ ] Define and verify supported downgrade/re-upgrade behavior on disposable data, including extension ownership.
+7. [ ] Add migration application and revision checks to CI, retaining connectivity and configuration tests.
+8. [ ] Record verification results and outstanding work in the implementation log.
 
 ### Completion criteria
 
-- A fresh database reaches the latest revision using the committed migration chain.
-- The vector extension exists before any vector columns are created.
-- Database constraints enforce the agreed relationships and scope boundaries.
+- A fresh database reaches the Phase 0 migration head and has pgvector enabled.
+- The shared base and metadata import without loading configuration or connecting to the database.
+- Alembic can use the shared metadata even before application models exist.
 - Application startup does not create tables or enable extensions.
-- Destructive downgrade operations and extension ownership are documented; an extension is not dropped automatically if it could be shared with other consumers.
+- Destructive downgrade operations and extension ownership are documented; a potentially shared extension is not dropped automatically.
 - Migration checks, lint, type checking, and tests pass in CI.
+
+The Python pgvector integration, embedding dimensions, application models, model registration, and table migrations belong to [Phase 1](phase_1.md). Table revisions must follow the Phase 0 extension revision.
 
 ### Migration references
 

@@ -47,6 +47,6 @@ The workflow runs lint, type checks, and pytest with a separate PostgreSQL/pgvec
 - Verify startup using an empty database volume.
 - Verify persistence of application data across restarts once tables exist.
 - Verify transaction rollback against real database writes; current failure-path checks use session mocks.
-- Add migrations and extension activation with the first database models.
+- Complete `db/base.py`, Alembic configuration, and extension migration application in Phase 0; application table models and their migrations belong to [Phase 1](../implenentation/phase_1.md).
 - Implement CLI startup that constructs settings and the session manager and disposes the engine on exit.
 - Implement the independent A-Mem pipeline and its evaluations.

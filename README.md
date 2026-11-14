@@ -4,7 +4,7 @@ A CLI-first research project for reproducing and evaluating agent memory approac
 
 **Current status:** Phase 0 infrastructure is implemented: validated database settings, local PostgreSQL/pgvector, SQLAlchemy sessions, and development checks. The entry point still prints a greeting. Memory models, migrations, the interactive CLI, backend selection, and evaluations are not yet implemented. A-Mem is the next implementation focus.
 
-See the [Phase 0 checklist](docs/implenentation/phase_0.md) and [implementation logs](docs/logs/README.md) for scope, decisions, and verification results.
+See the [Phase 0 infrastructure and migration checklist](docs/implenentation/phase_0.md), [Phase 1 persistence plan](docs/implenentation/phase_1.md), and [implementation logs](docs/logs/README.md) for scope, decisions, and verification results.
 
 ## Research references
 
