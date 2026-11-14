@@ -9,17 +9,18 @@ from db.session import DatabaseSessionManager
 
 
 class SettingsTests(unittest.TestCase):
-    def setUp(self):
+    def setUp(self) -> None:
         self.environment = patch.dict(os.environ, {}, clear=True)
         self.environment.start()
         self.addCleanup(self.environment.stop)
 
-    def test_password_is_required_and_not_empty(self):
-        for values in ({}, {"postgres_password": ""}):
-            with self.subTest(values=values), self.assertRaises(ValidationError):
-                Settings(_env_file=None, **values)
+    def test_password_is_required_and_not_empty(self) -> None:
+        with self.assertRaises(ValidationError):
+            Settings(_env_file=None)
+        with self.assertRaises(ValidationError):
+            Settings(_env_file=None, postgres_password="")
 
-    def test_password_reaches_engine_unchanged(self):
+    def test_password_reaches_engine_unchanged(self) -> None:
         password = "p@ss:/?#% word"
         settings = Settings(_env_file=None, postgres_password=password)
         manager = DatabaseSessionManager(settings.database_url)
@@ -27,7 +28,7 @@ class SettingsTests(unittest.TestCase):
         self.assertEqual(manager.engine.url.password, password)
         self.assertNotIn(password, repr(settings))
 
-    def test_port_boundaries(self):
+    def test_port_boundaries(self) -> None:
         for port in (0, -1, 65536):
             with self.subTest(port=port), self.assertRaises(ValidationError):
                 Settings(_env_file=None, postgres_password="test", postgres_port=port)
@@ -38,7 +39,7 @@ class SettingsTests(unittest.TestCase):
                 )
                 self.assertEqual(settings.database_url.port, port)
 
-    def test_environment_is_loaded(self):
+    def test_environment_is_loaded(self) -> None:
         with patch.dict(os.environ, POSTGRES_PASSWORD="test", POSTGRES_PORT="5433"):
             settings = Settings(_env_file=None)
         self.assertEqual(settings.database_url.password, "test")
@@ -46,7 +47,7 @@ class SettingsTests(unittest.TestCase):
 
 
 class SessionTests(unittest.TestCase):
-    def test_commit_rollback_and_close(self):
+    def test_commit_rollback_and_close(self) -> None:
         settings = Settings(_env_file=None, postgres_password="test")
         manager = DatabaseSessionManager(settings.database_url)
         self.addCleanup(manager.dispose)

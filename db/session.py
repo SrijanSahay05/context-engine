@@ -5,6 +5,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.engine import Engine, URL
 from sqlalchemy.orm import Session, sessionmaker
 
+
 class DatabaseSessionManager:
     """Manages the SQLAlchemy engine and sessions for the CLI engine."""
 
