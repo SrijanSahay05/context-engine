@@ -19,7 +19,7 @@ dev = [
 
 [tool.mypy]
 python_version = "3.15"
-files = ["core", "db", "main.py", "tests"]
+files = ["."]
 explicit_package_bases = true
 strict = true
 plugins = ["pydantic.mypy"]

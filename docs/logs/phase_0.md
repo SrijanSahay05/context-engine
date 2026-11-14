@@ -10,6 +10,7 @@ The infrastructure foundation for the CLI engine is implemented. No application 
 | `c4a78c4` | PostgreSQL/pgvector Compose service, environment template, and local credential ignore rules. |
 | `70b0aa6` | Validated settings, synchronous session management, and regression tests. |
 | `c5b8f4f` | Flake8, strict mypy, pytest, integration check, and GitHub Actions workflow. |
+| `af8c8e0` | Bootstrapped CI and the PR template directly on `main`, including an entry-point smoke test. |
 
 ## Decisions and review fixes
 
@@ -39,7 +40,7 @@ The infrastructure foundation for the CLI engine is implemented. No application 
 
 Configured GitHub protection for `main` to require a pull request, an up-to-date branch, and the `Quality gate` status check. Administrators are included; additional reviewer approval is not required. These settings live on GitHub, independently of the repository files.
 
-The workflow runs lint, type checks, and pytest with a separate PostgreSQL/pgvector service. It needs no repository database secrets. Hosted execution has not yet been verified; the workflow must first be pushed and run on a pull request or on `main`.
+The workflow runs lint, type checks, and pytest with a separate PostgreSQL/pgvector service. It needs no repository database secrets. The [initial hosted run on main](https://github.com/SrijanSahay05/context-engine/actions/runs/43640890034) passed. Main was merged into the Phase 0 branch before opening its PR; mypy now discovers the whole project. The Phase 0 PR will exercise the memory configuration and session tests on the hosted runner.
 
 ## Remaining work
 
