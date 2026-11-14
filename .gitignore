@@ -11,3 +11,12 @@ wheels/
 
 # Local agent preferences
 AGENTS.local.md
+
+# Local environment configuration
+.env
+.env.*
+!.env.example
+
+# Development tool caches
+.mypy_cache/
+.pytest_cache/
