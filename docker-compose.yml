@@ -1,0 +1,22 @@
+services:
+  db:
+    image: pgvector/pgvector:pg17
+    container_name: pgvector-db
+    restart: unless-stopped
+    shm_size: 1g # Prevents out-of-memory errors during large HNSW/IVFFlat index builds
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-context-engine}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Database password is required in .env}
+      POSTGRES_DB: ${POSTGRES_DB:-context-engine}
+    ports:
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - pgvector_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-context-engine} -d ${POSTGRES_DB:-context-engine}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  pgvector_data:

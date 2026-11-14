@@ -11,3 +11,8 @@ wheels/
 
 # Local agent preferences
 AGENTS.local.md
+
+# Local environment configuration
+.env
+.env.*
+!.env.example
