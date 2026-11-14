@@ -2,7 +2,9 @@
 
 A CLI-first research project for reproducing and evaluating agent memory approaches. The first phase implements **A-Mem** and **AgeMem** independently, with a choice of memory approach when starting the CLI engine. A later phase will investigate a hybrid approach after establishing independent baselines.
 
-**Current status:** project scaffold only. Implementation starts with A-Mem; the CLI, database integration, backend selection, and evaluations are planned, not yet available.
+**Current status:** Phase 0 infrastructure is implemented: validated database settings, local PostgreSQL/pgvector, SQLAlchemy sessions, and development checks. The entry point still prints a greeting. Memory models, migrations, the interactive CLI, backend selection, and evaluations are not yet implemented. A-Mem is the next implementation focus.
+
+See the [Phase 0 checklist](docs/implenentation/phase_0.md) and [implementation logs](docs/logs/README.md) for scope, decisions, and verification results.
 
 ## Research references
 
@@ -60,10 +62,25 @@ The CLI will call the memory logic directly. FastAPI can be added later when HTT
 
 ## Running the current scaffold
 
-The project currently declares Python 3.15 or newer in `pyproject.toml` and has no dependencies configured.
+The project requires Python 3.15 or newer and uses uv with a committed dependency lockfile. Runtime dependencies are SQLAlchemy, Psycopg 3, and Pydantic Settings. Development dependencies are Flake8, mypy, and pytest.
 
 ```sh
-python main.py
+uv run main.py
 ```
 
-This prints a greeting only. Memory commands, Docker configuration, and setup instructions will be added with the implementation.
+This prints a greeting only. The database uses `docker-compose.yml`; `.env.example` lists the connection settings. Local `.env` files are ignored. The database is published on localhost and uses a named volume. Extension activation will be handled by future migrations.
+
+## Development checks
+
+```sh
+uv sync --locked
+uv run --no-sync flake8 .
+uv run --no-sync mypy
+uv run --no-sync pytest
+```
+
+The database integration test requires `TEST_DATABASE_URL` pointing to a PostgreSQL database with pgvector available. It uses read-only queries and skips when the variable is absent. Unit tests do not require a running database.
+
+[CI](.github/workflows/ci.yml) runs on pull requests targeting `main`, pushes to `main`, and manual dispatch. Its `Quality gate` job runs lint, strict type checking, and tests with a separate PostgreSQL/pgvector service and test credentials.
+
+GitHub branch protection requires pull requests, an up-to-date branch, and a passing `Quality gate` before merging to `main`, including for administrators. No approving review is required. This repository setting is managed on GitHub separately from the workflow file. The workflow must be pushed with the branch before its check can run.
