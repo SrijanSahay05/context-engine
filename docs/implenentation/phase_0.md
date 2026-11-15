@@ -1,8 +1,8 @@
 # Phase 0: Local configuration and database connectivity
 
-Establish the infrastructure for the CLI engine. The initial scope covers configuration and database connectivity; extended work introduces the shared database base and migration management. Application tables belong to [Phase 1](phase_1.md). Memory behavior and Pydantic data schemas remain outside this phase.
+Establish the infrastructure for the CLI engine. The initial scope covers configuration and database connectivity; extended work introduces the shared database base and migration management. Conversation and message tables belong to [Phase 1](phase_1.md). Memory behavior and Pydantic data schemas remain outside this phase.
 
-**Status:** configuration and session infrastructure implemented; local checks passed. Alembic is installed and its migration scaffold initialized. Database configuration, metadata wiring, and migration revisions remain pending. Fresh-volume and application-data persistence checks remain outstanding. See the [Phase 0 log](../logs/phase_0.md).
+**Status:** configuration and session infrastructure implemented; local checks passed. The shared base, naming conventions, Alembic scaffold, and target metadata wiring are implemented. Alembic database connectivity and migration revisions remain pending. Fresh-volume and application-data persistence checks remain outstanding. See the [Phase 0 log](../logs/phase_0.md).
 
 ## Steps
 
@@ -28,20 +28,29 @@ Establish the infrastructure for the CLI engine. The initial scope covers config
 
 ## Extended work: shared base and migration foundation
 
-`db/base.py` belongs to this phase. It defines the single SQLAlchemy declarative base and shared metadata with consistent constraint naming. It does not define application tables or open database connections.
+`db/base_class.py` defines the single SQLAlchemy declarative base and shared metadata with consistent constraint naming; `db/base.py` explicitly re-exports it and will register application models. It does not define application tables or open database connections.
 
 The shared convention names indexes and unique constraints using every column, and foreign keys using all local columns plus the referenced table and columns. Check constraints require descriptive explicit names. Partial, expression, and alternate indexes on identical columns require explicit names. SQLAlchemy handles deterministic truncation of convention-generated names for PostgreSQL; keep identifiers short and readable rather than relying on truncation for uniqueness.
 
 ### Steps
 
 1. [x] Install Alembic and initialize its migration environment.
-2. [ ] Define the shared declarative base and constraint naming convention in `db/base.py`.
-3. [ ] Configure Alembic to load database settings when invoked and use `Base.metadata`, without credentials in committed configuration.
-4. [ ] Create and review an explicit initial migration for pgvector extension activation.
-5. [ ] Apply that migration to a fresh disposable database and verify the extension and Alembic revision state.
-6. [ ] Define and verify supported downgrade/re-upgrade behavior on disposable data, including extension ownership.
-7. [ ] Add migration application and revision checks to CI, retaining connectivity and configuration tests.
-8. [ ] Record verification results and outstanding work in the implementation log.
+2. [x] Define the shared base and naming conventions in `db/base_class.py` and export it through `db/base.py`.
+3. [x] Configure Alembic to use the shared `Base.metadata`.
+4. [ ] Replace Alembic's placeholder connection with application settings loaded when invoked, without committed credentials.
+5. [ ] Create and review an explicit initial migration for pgvector extension activation.
+6. [ ] Apply that migration to a fresh disposable database and verify the extension and Alembic revision state.
+7. [ ] Define and verify supported downgrade/re-upgrade behavior on disposable data, including extension ownership.
+8. [ ] Add migration application and revision checks to CI, retaining connectivity and configuration tests.
+9. [ ] Record verification results and outstanding work in the implementation log.
+
+### Verification of current implementation
+
+- The base imports without loading application settings; metadata is empty because there are no table models yet.
+- Flake8 and strict mypy pass. Pytest reports 11 passed and one database integration test skipped without its test URL.
+- Alembic has no revision heads. Its configured URL is still the generated placeholder.
+- `alembic current` fails with a placeholder-driver error; database migration connectivity is not configured.
+- CI runs lint, type checks, and tests, but does not yet apply migrations or verify database revisions.
 
 ### Completion criteria
 
@@ -52,7 +61,7 @@ The shared convention names indexes and unique constraints using every column, a
 - Destructive downgrade operations and extension ownership are documented; a potentially shared extension is not dropped automatically.
 - Migration checks, lint, type checking, and tests pass in CI.
 
-The Python pgvector integration, embedding dimensions, application models, model registration, and table migrations belong to [Phase 1](phase_1.md). Table revisions must follow the Phase 0 extension revision.
+Conversation/message models, their registration, and table migrations belong to [Phase 1](phase_1.md). Memory nodes, edges, boxes, embeddings, and Python pgvector integration are deferred beyond the basic chatbot milestone. If the Phase 0 extension revision is retained, table revisions follow it; the chatbot itself does not require vector storage.
 
 ### Migration references
 
