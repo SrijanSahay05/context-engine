@@ -30,6 +30,11 @@ jobs:
           --health-timeout 5s
           --health-retries 10
     env:
+      POSTGRES_USER: test
+      POSTGRES_PASSWORD: test
+      POSTGRES_DB: context_engine_test
+      POSTGRES_HOST: 127.0.0.1
+      POSTGRES_PORT: "5432"
       TEST_DATABASE_URL: postgresql+psycopg://test:test@127.0.0.1:5432/context_engine_test
     steps:
       - uses: actions/checkout@v6
@@ -44,5 +49,9 @@ jobs:
         run: uv run --no-sync flake8 .
       - name: Type check
         run: uv run --no-sync mypy
+      - name: Apply migrations
+        run: uv run --no-sync alembic upgrade head
+      - name: Verify migration revision
+        run: uv run --no-sync alembic current --check-heads
       - name: Test
         run: uv run --no-sync pytest
