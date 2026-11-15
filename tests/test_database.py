@@ -18,8 +18,9 @@ def test_database_connection() -> None:
             assert session.scalar(text("SELECT 1")) == 1
             assert session.scalar(text(
                 "SELECT EXISTS ("
-                "SELECT 1 FROM pg_available_extensions WHERE name = 'vector'"
+                "SELECT 1 FROM pg_extension WHERE extname = 'vector'"
                 ")"
             ))
+            assert session.scalar(text("SELECT '[1,2,3]'::vector::text")) == "[1,2,3]"
     finally:
         manager.dispose()
