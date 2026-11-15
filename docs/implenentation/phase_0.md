@@ -30,6 +30,8 @@ Establish the infrastructure for the CLI engine. The initial scope covers config
 
 `db/base.py` belongs to this phase. It defines the single SQLAlchemy declarative base and shared metadata with consistent constraint naming. It does not define application tables or open database connections.
 
+The shared convention names indexes and unique constraints using every column, and foreign keys using all local columns plus the referenced table and columns. Check constraints require descriptive explicit names. Partial, expression, and alternate indexes on identical columns require explicit names. SQLAlchemy handles deterministic truncation of convention-generated names for PostgreSQL; keep identifiers short and readable rather than relying on truncation for uniqueness.
+
 ### Steps
 
 1. [x] Install Alembic and initialize its migration environment.
