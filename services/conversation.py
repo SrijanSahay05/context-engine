@@ -29,12 +29,18 @@ def create_conversation(db: DatabaseSessionManager) -> int:
 
     return conversation_obj_id
 
+
 def list_conversations(db: DatabaseSessionManager) -> list[tuple[int, str]]:
     with db.session() as session:
-        conversations: Sequence[Conversation] = session.execute(
-            select(Conversation).order_by(Conversation.last_activity_at.desc())
-        ).scalars().all()
+        conversations: Sequence[Conversation] = (
+            session.execute(
+                select(Conversation).order_by(Conversation.last_activity_at.desc())
+            )
+            .scalars()
+            .all()
+        )
     return [(conv.id, str(conv.last_activity_at)) for conv in conversations]
+
 
 def send_message(
     db: DatabaseSessionManager, conversation_id: int, user_message: str
