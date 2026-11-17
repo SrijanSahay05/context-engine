@@ -2,7 +2,7 @@
 
 Establish the infrastructure for the CLI engine. The initial scope covers configuration and database connectivity; extended work introduces the shared database base and migration management. Conversation and message tables belong to [Phase 1](phase_1.md). Memory behavior and Pydantic data schemas remain outside this phase.
 
-**Status:** configuration and session infrastructure implemented; local checks passed. The shared base, naming conventions, Alembic scaffold, and target metadata wiring are implemented. Alembic database connectivity and migration revisions remain pending. Fresh-volume and application-data persistence checks remain outstanding. See the [Phase 0 log](../logs/phase_0.md).
+**Status:** configuration, sessions, shared metadata, Alembic database connectivity, and the pgvector baseline are implemented. CI applies migrations and checks the revision head. Fresh-volume lifecycle and downgrade/re-upgrade verification remain outstanding; application-data persistence across restarts belongs to Phase 1. See the [Phase 0 log](../logs/phase_0.md).
 
 ## Steps
 
@@ -13,7 +13,7 @@ Establish the infrastructure for the CLI engine. The initial scope covers config
 5. [x] Implement `db/session.py` with a synchronous engine and session factory.
 6. [x] Establish transaction ownership, commit, rollback, session closure, and engine disposal.
 7. [x] Verify configuration validation, database connectivity, and pgvector availability.
-8. [ ] Verify database startup with a fresh volume; application-data persistence is verified in Phase 1.
+8. [ ] Verify database startup with a fresh volume; application-data persistence checks are tracked in Phase 1.
 9. [x] Add Flake8, strict mypy, pytest, and a PR workflow with required checks on `main`.
 10. [x] Record implementation decisions, verification results, and outstanding work.
 
@@ -23,12 +23,12 @@ Establish the infrastructure for the CLI engine. The initial scope covers config
 - Construct a SQLAlchemy URL object to preserve credentials containing reserved characters.
 - Require a nonempty password and a port between 1 and 65535.
 - Load `.env` relative to the working directory; launch from the repository root.
-- Create settings and the session manager explicitly when the CLI is implemented; imports do not load configuration or create an engine.
-- The connectivity foundation checks pgvector availability; extended migration work will own extension activation.
+- The CLI creates settings and the session manager explicitly and disposes the manager on exit. Importing the shared base and models does not load database settings or create an engine.
+- The connectivity test checks pgvector availability; the baseline migration owns extension activation.
 
 ## Extended work: shared base and migration foundation
 
-`db/base_class.py` defines the single SQLAlchemy declarative base and shared metadata with consistent constraint naming; `db/base.py` explicitly re-exports it and will register application models. It does not define application tables or open database connections.
+`db/base_class.py` defines the single SQLAlchemy declarative base and shared metadata with consistent constraint naming. `db/base.py` re-exports it and registers the Phase 1 conversation/message models for Alembic. The base module does not open database connections.
 
 The shared convention names indexes and unique constraints using every column, and foreign keys using all local columns plus the referenced table and columns. Check constraints require descriptive explicit names. Partial, expression, and alternate indexes on identical columns require explicit names. SQLAlchemy handles deterministic truncation of convention-generated names for PostgreSQL; keep identifiers short and readable rather than relying on truncation for uniqueness.
 
@@ -37,20 +37,23 @@ The shared convention names indexes and unique constraints using every column, a
 1. [x] Install Alembic and initialize its migration environment.
 2. [x] Define the shared base and naming conventions in `db/base_class.py` and export it through `db/base.py`.
 3. [x] Configure Alembic to use the shared `Base.metadata`.
-4. [ ] Replace Alembic's placeholder connection with application settings loaded when invoked, without committed credentials.
-5. [ ] Create and review an explicit initial migration for pgvector extension activation.
+4. [x] Replace Alembic's placeholder connection with application settings loaded when invoked, without committed credentials.
+5. [x] Create an explicit initial migration for pgvector extension activation.
 6. [ ] Apply that migration to a fresh disposable database and verify the extension and Alembic revision state.
 7. [ ] Define and verify supported downgrade/re-upgrade behavior on disposable data, including extension ownership.
-8. [ ] Add migration application and revision checks to CI, retaining connectivity and configuration tests.
-9. [ ] Record verification results and outstanding work in the implementation log.
+8. [x] Add migration application and revision checks to CI, retaining connectivity and configuration tests.
+9. [x] Record verification results and outstanding work in the implementation log.
 
 ### Verification of current implementation
 
-- The base imports without loading application settings; metadata is empty because there are no table models yet.
-- Flake8 and strict mypy pass. Pytest reports 11 passed and one database integration test skipped without its test URL.
-- Alembic has no revision heads. Its configured URL is still the generated placeholder.
-- `alembic current` fails with a placeholder-driver error; database migration connectivity is not configured.
-- CI runs lint, type checks, and tests, but does not yet apply migrations or verify database revisions.
+- Shared metadata registers the conversation and message tables without loading database settings or connecting to PostgreSQL.
+- Alembic loads `Settings().database_url`; the generated URL placeholder in `alembic.ini` is not used by the migration environment.
+- Baseline revision `b8b64b6ebec5` enables pgvector. Phase 1 table revision `efb111231d7a` follows it and is the current head.
+- CI applies migrations, checks the revision head, and runs lint, type checks, and tests. Configuration of those checks is not evidence of a particular hosted run passing.
+- Latest local checks report Flake8 and mypy passing, with 13 pytest cases passed and nine database cases skipped without `TEST_DATABASE_URL`. Earlier service integration checks against disposable PostgreSQL are recorded in [Phase 1](phase_1.md).
+- Fresh-volume lifecycle, migration downgrade/re-upgrade, and application-data restart checks have not been verified in this documentation refresh.
+
+The baseline downgrade intentionally leaves pgvector installed to avoid removing a potentially shared extension. The Phase 1 table downgrade drops conversation/message data; supported downgrade/re-upgrade behavior still needs verification on disposable data.
 
 ### Completion criteria
 
@@ -61,7 +64,7 @@ The shared convention names indexes and unique constraints using every column, a
 - Destructive downgrade operations and extension ownership are documented; a potentially shared extension is not dropped automatically.
 - Migration checks, lint, type checking, and tests pass in CI.
 
-Conversation/message models, their registration, and table migrations belong to [Phase 1](phase_1.md). Memory nodes, edges, boxes, embeddings, and Python pgvector integration are deferred beyond the basic chatbot milestone. If the Phase 0 extension revision is retained, table revisions follow it; the chatbot itself does not require vector storage.
+Conversation/message models, their registration, and table migrations are implemented in [Phase 1](phase_1.md). Memory nodes, edges, boxes, embeddings, and Python pgvector integration remain deferred. The chatbot itself does not require vector storage, though its table migration follows the pgvector baseline.
 
 ### Migration references
 
