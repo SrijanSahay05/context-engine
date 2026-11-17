@@ -2,7 +2,7 @@
 
 A CLI-first research project for reproducing and evaluating agent memory approaches. First establish a resumable local chatbot, then implement **A-Mem** and **AgeMem** independently with a choice of memory approach. Later work will investigate a hybrid approach after establishing independent baselines.
 
-**Current status:** database settings, local PostgreSQL/pgvector, sessions, the shared base, and development checks are implemented. Alembic uses the shared metadata, but database connection configuration and migration revisions remain pending. The entry point still prints a greeting. Conversation/message models and the resumable Ollama chatbot are the next focus; memory management follows later.
+**Current status:** database configuration, sessions, shared metadata, Alembic migrations, conversation/message models, Ollama integration, and the basic interactive chatbot are implemented. Phase 1 still needs CLI error handling, interrupted-turn recovery, context-budget enforcement, and further verification. Memory management is not implemented yet.
 
 See the [Phase 0 infrastructure and migration checklist](docs/implenentation/phase_0.md), [Phase 1 chatbot plan](docs/implenentation/phase_1.md), and [implementation logs](docs/logs/README.md) for scope, decisions, and verification results.
 
@@ -15,9 +15,9 @@ See the [Phase 0 infrastructure and migration checklist](docs/implenentation/pha
 
 ## Phase 1: Resumable local CLI chatbot
 
-Build a basic synchronous chatbot using local Ollama models through LangChain, without a memory-management layer. Store conversations and messages, allocate per-conversation message indices transactionally, and support new and resumed conversations. The system message occupies index 0. Model calls run outside database transactions; overlapping turns and interrupted responses require explicit handling.
+The synchronous chatbot uses local Ollama models through LangChain. It supports new conversations and listing/resuming existing ones, storing the system instruction and messages in PostgreSQL. History is ordered by auto-generated message ID; there is no per-conversation sequence counter. Model calls run outside database transactions, and each saved message updates conversation activity.
 
-Conversation/message models and their migrations come first. A-Mem nodes, edges, boxes, embeddings, and custom provider abstractions are deferred.
+The supported scope is one active CLI writer. Interrupted-turn recovery and context limits remain pending; concurrent writers are not coordinated. A-Mem nodes, edges, boxes, embeddings, and custom provider abstractions are deferred.
 
 ## Subsequent work: Independent memory reproductions
 
@@ -58,23 +58,31 @@ After establishing the independent baselines, investigate combining A-Mem's link
 
 ## Planned stack
 
-- **Python CLI:** initially using `argparse`.
+- **Python CLI:** interactive `input()`/`print()` menu and chat loop.
 - **Memory logic:** ordinary Python functions independent of the CLI.
-- **Persistence:** SQLAlchemy with synchronous sessions, Psycopg 3, and `pgvector-python`.
+- **Persistence:** SQLAlchemy with synchronous sessions and Psycopg 3; `pgvector-python` is planned for memory work.
 - **Database:** PostgreSQL with pgvector, running through Docker Compose with persistent storage.
 - **Migrations:** Alembic.
 
 The CLI will call the memory logic directly. FastAPI can be added later when HTTP access is needed, reusing the same functions. An HTTP server and web UI are outside the initial scope.
 
-## Running the current scaffold
+## Running the chatbot
 
-The project requires Python 3.15 or newer and uses uv with a committed dependency lockfile. Runtime dependencies are SQLAlchemy, Psycopg 3, and Pydantic Settings. Development dependencies are Flake8, mypy, and pytest.
+The project requires Python 3.15 or newer and uses uv with a committed dependency lockfile. Runtime dependencies include LangChain with Ollama support, SQLAlchemy, Psycopg 3, and Pydantic Settings. Development dependencies include Alembic, Black, Flake8, mypy, and pytest.
+
+From the repository root, copy `.env.example` to `.env` and set a local database password. Configuration uses the individual `POSTGRES_*` values; a `DATABASE_URL` override is not supported. Local `.env` files are ignored. Install Ollama and start its local server, then prepare the database and model:
 
 ```sh
-uv run main.py
+uv sync --locked
+docker compose up -d
+uv run --no-sync alembic upgrade head
+ollama pull gemma3:1b
+uv run --no-sync main.py
 ```
 
-This prints a greeting only. The database uses `docker-compose.yml`; `.env.example` lists the connection settings. Local `.env` files are ignored. The database is published on localhost and uses a named volume. Extension activation will be handled by future migrations.
+The menu offers a new conversation or a list of conversations to resume. Enter `/exit` to leave the chat. The model is currently fixed to `gemma3:1b` with temperature 0 in `llm/local_ollama.py`; its selection is not stored per conversation. Invalid input and model/database failures can still terminate the CLI with an exception.
+
+The database uses `docker-compose.yml`, is published on localhost, and retains data in a named volume. Alembic activates pgvector and creates application tables; application startup does not create the schema. Dropping a conversation deletes its history through a database cascade.
 
 ## Development checks
 
@@ -85,8 +93,8 @@ uv run --no-sync mypy
 uv run --no-sync pytest
 ```
 
-The database integration test requires `TEST_DATABASE_URL` pointing to a PostgreSQL database with pgvector available. It uses read-only queries and skips when the variable is absent. Unit tests do not require a running database.
+Database integration tests require `TEST_DATABASE_URL` pointing to a test PostgreSQL database with pgvector available. The connectivity test uses read-only queries; conversation service tests create and remove isolated temporary schemas and require schema-creation privileges. Ollama is mocked in service tests. Database cases skip when the variable is absent; unit tests do not require a running database. CLI and conversation-listing tests remain pending.
 
-[CI](.github/workflows/ci.yml) runs on pull requests targeting `main`, pushes to `main`, and manual dispatch. Its `Quality gate` job runs lint, strict type checking, and tests with a separate PostgreSQL/pgvector service and test credentials.
+[CI](.github/workflows/ci.yml) runs on pull requests targeting `main`, pushes to `main`, and manual dispatch. Its `Quality gate` job runs lint, strict type checking, migration application and revision checks, and tests with a separate PostgreSQL/pgvector service and test credentials.
 
 GitHub branch protection requires pull requests, an up-to-date branch, and a passing `Quality gate` before merging to `main`, including for administrators. No approving review is required. This repository setting is managed on GitHub separately from the workflow file. The workflow must be pushed with the branch before its check can run.

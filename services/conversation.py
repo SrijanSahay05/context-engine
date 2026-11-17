@@ -74,7 +74,7 @@ def send_message(
         conversation.last_activity_at = user_message_obj.created_at
 
     # 4. build the request from the saved history + the user_message,
-    # including it exactly once.PendingDeprecationWarning
+    # including it exactly once.
     context.append(("user", user_message))
 
     # 5. invoke ollama after closing the database transaction.

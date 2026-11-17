@@ -14,7 +14,6 @@ def main() -> None:
         user_input = input(">>> ")
         match user_input:
             case "1":
-                print("gg")
                 conversation_id = create_conversation(db=db)
             case "2":
                 conversations = list_conversations(db=db)

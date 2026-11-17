@@ -19,7 +19,7 @@ The current scope is a single-user CLI with one active writer. Message IDs provi
 | `main.py` | Interactive new/resume menu, input loop, reply display, and database-manager disposal. |
 | `migrations/versions/` | pgvector baseline and conversation/message table revisions. |
 | `tests/test_conversation.py` | Input validation and PostgreSQL service persistence/failure checks with Ollama mocked. |
-| `tests/test_entrypoint.py` | Old greeting smoke test; must be updated for the interactive CLI. |
+| CLI tests (pending) | The old greeting smoke test was removed in `c904ae7`; interactive CLI coverage has not been added. |
 
 Use the existing shared base. LangChain supplies the chat-model interface; a custom provider base remains deferred. The initial interface uses `input()` and `print()` rather than argparse or a TUI framework. CLI presentation stays in `main.py`; persistence and context construction stay in the service.
 
@@ -56,7 +56,7 @@ Conversation creation saves the system message atomically with the conversation.
 
 ## Implementation steps
 
-1. [x] Configure Alembic connections, the pgvector baseline, and shared model metadata. See [Phase 0](phase_0.md); its checklist still needs a separate status reconciliation.
+1. [x] Configure Alembic connections, the pgvector baseline, and shared model metadata. See [Phase 0](phase_0.md) for remaining infrastructure verification.
 2. [x] Define conversation/message models, ID-based ordering, constraints, and cascading deletion for the single-writer scope.
 3. [x] Generate and commit the conversation/message migration; local review and application were reported by the owner.
 4. [x] Add the fixed-model Ollama client and conversation creation, listing, and send services.
@@ -66,7 +66,7 @@ Conversation creation saves the system message atomically with the conversation.
 8. [ ] Add direct PostgreSQL constraint and database-cascade checks, and verify fresh-database migration behavior for this branch.
 9. [ ] Add CLI validation and error/exit handling, and define/test recovery for unanswered user turns.
 10. [ ] Define and test context-budget enforcement and resolve the model-configuration limitation for resume.
-11. [ ] Update the old entrypoint smoke test; add CLI and conversation-listing tests, and pass all required checks.
+11. [ ] Add interactive CLI and conversation-listing tests to replace the removed greeting smoke test, and pass all required checks.
 12. [ ] Verify a real Ollama/PostgreSQL create, multi-turn chat, exit, and resume flow across process restarts; record evidence before beginning memory management.
 
 ## Verification evidence and limits
@@ -74,7 +74,7 @@ Conversation creation saves the system message atomically with the conversation.
 - Commit `a2b6ed5` added 11 service test cases: three blank-input unit cases and eight PostgreSQL integration cases with Ollama mocked. Each database case uses an isolated temporary schema and requires `TEST_DATABASE_URL`.
 - At that commit, the full suite passed against disposable PostgreSQL: 23 tests passed, with eight unittest subtests. Flake8 and mypy passed. The disposable container was removed afterward; the development database was not used.
 - The service tests build tables from model metadata in temporary schemas. They do not verify Alembic migrations, direct database deletion cascading, or every database constraint.
-- Subsequent commits added conversation listing and the CLI. Mypy passed, but the old greeting-based entrypoint test failed. A later working-tree formatting pass resolved the lint failures; Flake8 now passes. The full suite has not been rerun after those edits, so the earlier 23-pass result does not establish that the current branch passes.
+- Subsequent commits added conversation listing and the CLI. Commit `c904ae7` removed the obsolete greeting smoke test without adding CLI coverage; `95e5ea3` applied formatting fixes. Latest local checks pass Flake8 and mypy, with 13 pytest cases passed, nine database cases skipped without `TEST_DATABASE_URL`, and eight unittest subtests passed. This does not replace the earlier database-enabled verification or establish end-to-end CLI behavior.
 - Automated service checks do not invoke real Ollama. End-to-end CLI resume, context limits, and incomplete-turn recovery remain unverified.
 
 ## Completion criteria
