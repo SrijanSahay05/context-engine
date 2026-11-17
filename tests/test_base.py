@@ -43,7 +43,8 @@ def test_foreign_key_names_include_all_columns_and_targets() -> None:
     metadata = MetaData(naming_convention=Base.metadata.naming_convention)
     for name in ("parents", "alternates"):
         Table(
-            name, metadata,
+            name,
+            metadata,
             Column("scope_id", Integer),
             Column("id", Integer),
             Column("legacy_id", Integer),
@@ -55,9 +56,14 @@ def test_foreign_key_names_include_all_columns_and_targets() -> None:
     other_column = ForeignKeyConstraint(["parent_id"], ["parents.legacy_id"])
     simple = ForeignKeyConstraint(["parent_id"], ["parents.id"])
     Table(
-        "children", metadata,
-        Column("scope_id", Integer), Column("parent_id", Integer),
-        composite, other_table, other_column, simple,
+        "children",
+        metadata,
+        Column("scope_id", Integer),
+        Column("parent_id", Integer),
+        composite,
+        other_table,
+        other_column,
+        simple,
     )
     assert composite.name == "children_scope_id_parent_id_parents_scope_id_id_fkey"
     assert len({c.name for c in (composite, other_table, other_column, simple)}) == 4
@@ -76,15 +82,22 @@ def test_check_constraints_require_descriptive_names() -> None:
 def test_postgresql_truncates_long_generated_names_deterministically() -> None:
     metadata = MetaData(naming_convention=Base.metadata.naming_convention)
     table = Table(
-        "memory_source_associations", metadata,
+        "memory_source_associations",
+        metadata,
         Column("original_conversation_identifier", Integer),
         Column("original_message_identifier", Integer),
         Column("alternate_message_identifier", Integer),
     )
-    first = Index(None, table.c.original_conversation_identifier,
-                  table.c.original_message_identifier)
-    second = Index(None, table.c.original_conversation_identifier,
-                   table.c.alternate_message_identifier)
+    first = Index(
+        None,
+        table.c.original_conversation_identifier,
+        table.c.original_message_identifier,
+    )
+    second = Index(
+        None,
+        table.c.original_conversation_identifier,
+        table.c.alternate_message_identifier,
+    )
     dialect = create_engine("postgresql+psycopg://").dialect
     first_ddl = str(CreateIndex(first).compile(dialect=dialect))
     second_ddl = str(CreateIndex(second).compile(dialect=dialect))
@@ -100,7 +113,8 @@ def test_specialized_indexes_preserve_explicit_names() -> None:
     metadata = MetaData(naming_convention=Base.metadata.naming_convention)
     table = Table("sample", metadata, Column("value", Integer))
     expression = Index("sample_abs_value_idx", func.abs(table.c.value))
-    partial = Index("sample_positive_value_idx", table.c.value,
-                    postgresql_where=table.c.value > 0)
+    partial = Index(
+        "sample_positive_value_idx", table.c.value, postgresql_where=table.c.value > 0
+    )
     assert expression.name == "sample_abs_value_idx"
     assert partial.name == "sample_positive_value_idx"

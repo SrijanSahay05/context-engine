@@ -2,7 +2,9 @@
 
 Build a synchronous text chatbot powered by local Ollama models through LangChain. Persist conversations and messages in PostgreSQL and allow a conversation to resume after the CLI exits. Conversation history is the only context mechanism in this milestone; A-Mem nodes, edges, boxes, embeddings, retrieval, and memory evolution are deferred.
 
-**Status:** planned. The shared SQLAlchemy base and metadata wiring are implemented. Alembic database connectivity and migration verification still need completion in [Phase 0](phase_0.md).
+**Status:** basic chatbot implemented; Phase 1 hardening and verification remain pending. Models, table migrations, Ollama setup, conversation services, and an interactive CLI are committed. Service tests passed against disposable PostgreSQL before the CLI was added. The latest CLI still needs error handling and updated tests.
+
+The current scope is a single-user CLI with one active writer. Message IDs provide ordering; the earlier per-conversation sequence counter and concurrent-writer coordination are deferred. This is a project simplification, not a claim of concurrent conversation safety.
 
 ## File responsibilities
 
@@ -10,68 +12,79 @@ Build a synchronous text chatbot powered by local Ollama models through LangChai
 | --- | --- |
 | `db/base_class.py` | Existing declarative base and naming conventions. |
 | `db/base.py` | Existing base export and registration of table models for Alembic. |
-| `models/messages.py` | Conversation and message SQLAlchemy models, following the latest proposed layout. |
+| `models/messages.py` | Implemented conversation/message models, constraints, relationships, and deletion behavior. |
 | `db/session.py` | Existing session and transaction lifecycle. |
-| `llm/ollama.py` | Construct and invoke LangChain's ChatOllama integration. |
-| CLI entry point | Select a new or existing conversation, accept input, and display responses. |
-| `migrations/versions/` | Reviewed conversation/message table revisions. |
-| `tests/` | Constraints, message ordering, migration, failure-path, and resume checks. |
+| `llm/local_ollama.py` | Construct the synchronous `ChatOllama` client. |
+| `services/conversation.py` | Create/list conversations, build ordered context, invoke the model, and persist exchanges. |
+| `main.py` | Interactive new/resume menu, input loop, reply display, and database-manager disposal. |
+| `migrations/versions/` | pgvector baseline and conversation/message table revisions. |
+| `tests/test_conversation.py` | Input validation and PostgreSQL service persistence/failure checks with Ollama mocked. |
+| `tests/test_entrypoint.py` | Old greeting smoke test; must be updated for the interactive CLI. |
 
-Use the existing shared base; do not introduce a second base under `models/`. LangChain already supplies a common chat-model interface. Defer a custom `llm/base_provider.py` abstraction until a second provider establishes the required contract. Initially select an Ollama model rather than showing a provider menu with only one option.
+Use the existing shared base. LangChain supplies the chat-model interface; a custom provider base remains deferred. The initial interface uses `input()` and `print()` rather than argparse or a TUI framework. CLI presentation stays in `main.py`; persistence and context construction stay in the service.
 
-## Initial database models
+## Implemented database models
 
-| Model | Required responsibilities |
+| Model | Current fields and behavior |
 | --- | --- |
-| Conversation | Identity, optional title, selected provider/model, creation timestamp, and a persisted `next_message_index` counter. |
-| Message | Identity, required conversation foreign key, role, text content, `sequence_number`, and creation timestamp. |
+| Conversation | Auto-generated integer ID, timezone-aware `created_at`, and `last_activity_at`. |
+| Message | Auto-generated integer ID, required conversation foreign key, string role, text content, nullable token count, and timezone-aware `created_at`. |
 
-A conversation has many messages. Keep the model selection fixed within a conversation initially. Define explicit conversation-deletion behavior before applying migrations. The selected system prompt is stored as a message so resuming preserves it.
+A conversation has many messages, loaded in ascending message-ID order. Role values are constrained to `system`, `user`, `assistant`, and `tool`; non-null token counts must be nonnegative. A composite index covers `(conversation_id, id)`. Database `ON DELETE CASCADE` removes history when a conversation is deleted; ORM `delete-orphan` also removes messages detached from its collection.
 
-## Message ordering and transaction rules
+Conversation creation saves the system message atomically with the conversation. Each saved message updates last activity in the same transaction. Titles, per-conversation sequence counters, and persisted provider/model selection are not implemented. The model is currently fixed to `gemma3:1b` with temperature 0 in the Ollama module; changing that configuration also changes the model used for resumed conversations.
 
-- Store the counter on each conversation row, not in process memory. It is independent for every conversation and survives restarts.
-- Create the conversation and system message at index 0 atomically, leaving `next_message_index` at 1.
-- For each append, lock the conversation row, take its next index, insert the message, and increment the counter in one short transaction. Rollback must undo both the insertion and counter change.
-- Enforce a unique constraint on `(conversation_id, sequence_number)`, nonnegative indices, and valid roles. Index 0 is reserved for the system message; later messages use user or assistant roles.
-- Read history ordered by `sequence_number`; do not derive order from timestamps or use an unlocked maximum-index query.
-- The successful sequential flow is system 0, user 1, assistant 2, user 3, assistant 4. Persist the role explicitly; do not infer it from odd/even indices or require gap-free history after future deletion policies.
-- Commit the user message before invoking Ollama. Persist a completed assistant response in a separate transaction afterward. Do not hold a database transaction or row lock while waiting for generation.
-- Allow one in-flight turn per conversation. Counter locking protects index allocation, not the entire user/assistant exchange. Reject overlapping turns, including attempts from another CLI process, before invoking the model; choose a conversation-ownership mechanism that does not require an open transaction during generation.
-- If generation fails or the process exits after saving the user message, retain that message and report the incomplete turn. Resuming must resolve it explicitly, for example by retrying that turn or starting another conversation; do not fabricate an assistant message or silently resend the user input as a second row.
-- Decide ownership recovery after a crashed process before claiming concurrent CLI resume support. Do not reserve assistant indices ahead of generation in this first version.
+## Message ordering and transaction behavior
+
+- Create the conversation and its system message in one transaction.
+- Read history by ascending message ID. IDs are global and may have gaps; roles are stored explicitly, not inferred from IDs.
+- Save the user message and last activity before invoking Ollama. Build a structured role/content list containing the stored history and new input exactly once.
+- Invoke Ollama outside the database session, then save the assistant response and last activity in a separate transaction. Reload the conversation in that second session.
+- Return the reply only after its transaction commits. The session manager owns commit, rollback, and closure.
+- Reject blank input and unknown conversation IDs. Reject non-string assistant content before opening the response-save transaction.
+- Generation or response-save failures retain the committed user message without an assistant row. Explicit recovery when resuming an unanswered turn is still required; currently the CLI does not detect that state.
+- Assume one active CLI writer. There is no database ownership lock or overlapping-turn rejection; multi-process coordination and crash-recovery ownership are deferred.
 
 ## LangChain and CLI responsibilities
 
-- Use the `langchain-ollama` integration and a direct synchronous model invocation; agents, tools, and LangGraph are outside scope.
-- Convert stored system/user/assistant messages into LangChain's message representation when constructing a request. LangChain does not own the database history.
-- For a new conversation, choose an available local model and persist the system instruction and model selection.
-- For resume, load the selected conversation and its ordered history, reuse its model, and include that history in subsequent requests.
-- Define a conservative context budget for the chosen model, reserve output space, and report an over-budget conversation clearly. Do not silently drop saved history; automatic summarization is deferred.
-- Handle unavailable Ollama servers, missing models, failed requests, blank input, interruption, and normal exit. Start with complete responses rather than streaming.
-- Display successful replies only after their persistence succeeds. If generation succeeds but saving fails, report that the reply was not recorded.
+- Implemented: direct synchronous `ChatOllama.invoke()` with complete responses. Agents, tool execution, streaming, and LangGraph remain outside this milestone.
+- Implemented: persisted system instructions and ordered role/content history supplied on each request; LangChain does not own database history.
+- Implemented: list conversations by descending last activity; select new/resume, accept messages, display saved replies, and exit with `/exit`. The database manager is disposed in `finally`.
+- Pending: validate resume selections and handle blank input, unavailable servers, missing models, request/save failures, Ctrl+C, and EOF with clear CLI messages rather than uncaught exceptions.
+- Pending: define a conservative input context budget, reserve output space, and explicitly report over-budget history. No sliding window, automatic trimming, or summarization is implemented or required for this milestone.
+- Pending: decide how model configuration is preserved across resume. Persisted model selection is absent; the fixed module configuration is the current limitation.
 
 ## Implementation steps
 
-1. [ ] Finish Phase 0 Alembic connection configuration and the agreed extension baseline.
-2. [ ] Define conversation/message models and decide deletion, ordering, ownership, and incomplete-turn recovery policies.
-3. [ ] Register the models with the shared metadata; generate, review, and apply their migration to a disposable database.
-4. [ ] Verify foreign keys, roles, system index, uniqueness, atomic counter allocation, rollback, and independent conversation counters against PostgreSQL.
-5. [ ] Add LangChain's Ollama integration and configure the local endpoint and model selection.
-6. [ ] Verify one successful text request without persistence or CLI orchestration first.
-7. [ ] Implement the synchronous new-conversation chat loop with persisted exchanges.
-8. [ ] Implement listing/resuming conversations with history replay and incomplete-turn handling.
-9. [ ] Verify overlapping-turn rejection, context-limit behavior, request/save failures, and restart persistence.
-10. [ ] Extend CI with migration and database behavior checks; use a fake model for deterministic chat tests and keep real Ollama checks explicit.
-11. [ ] Record verification evidence and limitations before beginning memory management work.
+1. [x] Configure Alembic connections, the pgvector baseline, and shared model metadata. See [Phase 0](phase_0.md); its checklist still needs a separate status reconciliation.
+2. [x] Define conversation/message models, ID-based ordering, constraints, and cascading deletion for the single-writer scope.
+3. [x] Generate and commit the conversation/message migration; local review and application were reported by the owner.
+4. [x] Add the fixed-model Ollama client and conversation creation, listing, and send services.
+5. [x] Implement the basic new/resume menu and synchronous chat loop.
+6. [x] Add focused service tests with mocked Ollama; verify persistence, context ordering/isolation, timestamps, and failure rollback against disposable PostgreSQL.
+7. [x] Configure CI to apply migrations, check the revision head, and run lint, type checks, and database tests.
+8. [ ] Add direct PostgreSQL constraint and database-cascade checks, and verify fresh-database migration behavior for this branch.
+9. [ ] Add CLI validation and error/exit handling, and define/test recovery for unanswered user turns.
+10. [ ] Define and test context-budget enforcement and resolve the model-configuration limitation for resume.
+11. [ ] Update the old entrypoint smoke test; add CLI and conversation-listing tests, and pass all required checks.
+12. [ ] Verify a real Ollama/PostgreSQL create, multi-turn chat, exit, and resume flow across process restarts; record evidence before beginning memory management.
+
+## Verification evidence and limits
+
+- Commit `a2b6ed5` added 11 service test cases: three blank-input unit cases and eight PostgreSQL integration cases with Ollama mocked. Each database case uses an isolated temporary schema and requires `TEST_DATABASE_URL`.
+- At that commit, the full suite passed against disposable PostgreSQL: 23 tests passed, with eight unittest subtests. Flake8 and mypy passed. The disposable container was removed afterward; the development database was not used.
+- The service tests build tables from model metadata in temporary schemas. They do not verify Alembic migrations, direct database deletion cascading, or every database constraint.
+- Subsequent commits added conversation listing and the CLI. Mypy passed, but the old greeting-based entrypoint test failed. A later working-tree formatting pass resolved the lint failures; Flake8 now passes. The full suite has not been rerun after those edits, so the earlier 23-pass result does not establish that the current branch passes.
+- Automated service checks do not invoke real Ollama. End-to-end CLI resume, context limits, and incomplete-turn recovery remain unverified.
 
 ## Completion criteria
 
 - A fresh database reaches the committed schema using migrations, without startup-time table creation.
-- A user can start a local-model conversation, exchange multiple messages, exit, and resume with the same system instruction and ordered context.
-- Concurrent index allocations cannot produce duplicates, and failed transactions cannot advance the counter without inserting the corresponding message.
-- A conversation cannot run overlapping generations; recovery behavior for interrupted turns is defined and tested.
-- Model and database failures preserve an honest record of which messages were saved.
+- A user can start a local-model conversation, exchange multiple messages, exit, and resume with the same stored system instruction and ID-ordered context.
+- The supported execution scope is one active CLI writer; concurrent-process safety is not claimed.
+- Recovery behavior for interrupted or failed turns is explicit and tested, without duplicating user messages or inventing replies.
+- Model and database failures preserve an honest record of saved messages and are reported clearly in the CLI.
+- Model configuration on resume is either preserved or explicitly constrained and documented.
 - Context limits are handled explicitly; tests and required CI checks pass.
 - Memory-management tables and behavior remain outside this milestone.
 
@@ -80,7 +93,6 @@ A conversation has many messages. Keep the model selection fixed within a conver
 - [SQLAlchemy declarative mapping](https://docs.sqlalchemy.org/en/20/orm/declarative_styles.html)
 - [SQLAlchemy relationship patterns](https://docs.sqlalchemy.org/en/20/orm/basic_relationships.html)
 - [SQLAlchemy foreign keys and constraints](https://docs.sqlalchemy.org/en/20/core/constraints.html)
-- [PostgreSQL row-level locks](https://www.postgresql.org/docs/current/explicit-locking.html#LOCKING-ROWS)
 - [Alembic autogeneration and review](https://alembic.sqlalchemy.org/en/latest/autogenerate.html)
 - [LangChain ChatOllama](https://reference.langchain.com/python/langchain-ollama/chat_models/ChatOllama)
 - [LangChain messages](https://reference.langchain.com/python/langchain/messages)

@@ -1,10 +1,10 @@
 # Context Engine
 
-A CLI-first research project for reproducing and evaluating agent memory approaches. The first phase implements **A-Mem** and **AgeMem** independently, with a choice of memory approach when starting the CLI engine. A later phase will investigate a hybrid approach after establishing independent baselines.
+A CLI-first research project for reproducing and evaluating agent memory approaches. First establish a resumable local chatbot, then implement **A-Mem** and **AgeMem** independently with a choice of memory approach. Later work will investigate a hybrid approach after establishing independent baselines.
 
-**Current status:** Phase 0 infrastructure is implemented: validated database settings, local PostgreSQL/pgvector, SQLAlchemy sessions, and development checks. The entry point still prints a greeting. Memory models, migrations, the interactive CLI, backend selection, and evaluations are not yet implemented. A-Mem is the next implementation focus.
+**Current status:** database settings, local PostgreSQL/pgvector, sessions, the shared base, and development checks are implemented. Alembic uses the shared metadata, but database connection configuration and migration revisions remain pending. The entry point still prints a greeting. Conversation/message models and the resumable Ollama chatbot are the next focus; memory management follows later.
 
-See the [Phase 0 infrastructure and migration checklist](docs/implenentation/phase_0.md), [Phase 1 persistence plan](docs/implenentation/phase_1.md), and [implementation logs](docs/logs/README.md) for scope, decisions, and verification results.
+See the [Phase 0 infrastructure and migration checklist](docs/implenentation/phase_0.md), [Phase 1 chatbot plan](docs/implenentation/phase_1.md), and [implementation logs](docs/logs/README.md) for scope, decisions, and verification results.
 
 ## Research references
 
@@ -13,7 +13,13 @@ See the [Phase 0 infrastructure and migration checklist](docs/implenentation/pha
 | A-Mem | [A-Mem: Agentic Memory for LLM Agents](docs/reference_research/A-mem_research_paper.pdf) | Atomic memory notes enriched with context, keywords, tags, and embeddings; LLM-driven linking and evolution of related memories. |
 | AgeMem | [Agentic Memory: Learning Unified Long-Term and Short-Term Memory Management for Large Language Model Agents](docs/reference_research/AgeMem_research_paper.pdf) | Unified long-term and short-term memory management through agent-controlled tools, learned using progressive reinforcement learning and step-wise GRPO. |
 
-## Phase 1: Independent reproductions through a CLI
+## Phase 1: Resumable local CLI chatbot
+
+Build a basic synchronous chatbot using local Ollama models through LangChain, without a memory-management layer. Store conversations and messages, allocate per-conversation message indices transactionally, and support new and resumed conversations. The system message occupies index 0. Model calls run outside database transactions; overlapping turns and interrupted responses require explicit handling.
+
+Conversation/message models and their migrations come first. A-Mem nodes, edges, boxes, embeddings, and custom provider abstractions are deferred.
+
+## Subsequent work: Independent memory reproductions
 
 Implement and evaluate each paper's approach separately. At CLI startup, users will choose the memory approach for that session. Initially, only A-Mem will be available; AgeMem becomes selectable once implemented.
 
@@ -46,7 +52,7 @@ Reproduce each paper's findings using its documented datasets, metrics, model co
 
 Any cross-approach comparison should also use a shared evaluation setup with controlled model choices, inputs, and budgets. No reproduction results are available yet.
 
-## Phase 2: Hybrid experiments
+## Later work: Hybrid experiments
 
 After establishing the independent baselines, investigate combining A-Mem's linked, evolving notes with AgeMem's unified memory management. Evaluate whether the hybrid improves on those baselines; its design is intentionally undecided until the independent implementations provide evidence.
 
